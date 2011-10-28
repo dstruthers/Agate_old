@@ -1,0 +1,9 @@
+Scheme.hs
+By Darren M. Struthers <dstruthers@gmail.com>
+
+OVERVIEW
+This is a toy Scheme implementation, written in Haskell.
+
+LICENSING
+This is free software licensed under the terms of the X11 license. See LICENSE
+for more information.
