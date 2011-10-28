@@ -16,9 +16,12 @@ import Expr
 
 data Op = Constant Expr
         | Lookup String
+        | Test { consequent  :: Inst
+               , alternative :: Inst
+               }
 
-data Inst = Inst { getOp   :: Op
-                 , nextInst  :: Inst
+data Inst = Inst { getOp    :: Op
+                 , nextInst :: Inst
                  }
           | Halt
 
@@ -50,5 +53,7 @@ execute vm inst = case getOp inst of
   Lookup s -> case lookup s (environment vm) of
     Just v  -> execute vm { accumulator = v } (nextInst inst)
     Nothing -> SException ("Unbound variable: " ++ s)
-
-  _ -> SException "Unknown runtime error"
+    
+  Test c a -> if isTrue (accumulator vm)
+              then execute vm c
+              else execute vm a

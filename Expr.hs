@@ -18,6 +18,13 @@ isNull :: Expr -> Bool
 isNull SNull = True
 isNull _     = False
 
+isTrue :: Expr -> Bool
+isTrue = not . isFalse
+
+isFalse :: Expr -> Bool
+isFalse (SBool False) = True
+isFalse _             = False
+
 fromList :: [Expr] -> Expr
 fromList [] = SNull
 fromList (x:xs) = SPair x (fromList xs)
