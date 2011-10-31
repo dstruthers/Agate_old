@@ -1,7 +1,6 @@
 module VM 
        (
          Inst(..)
-       , Op(..)
        , Env
        , execute
        , initialVM
@@ -14,17 +13,13 @@ import Data.Char (toUpper)
 import qualified Data.Map as M
 import Expr
 
-data Op = Assign String
-        | Constant Expr
-        | Lookup String
-        | Test { consequent  :: Inst
-               , alternative :: Inst
-               }
-
-data Inst = Inst { getOp    :: Op
-                 , nextInst :: Inst
+data Inst = Assign String
+          | Constant Expr
+          | Lookup String
+          | Test { consequent  :: Compiled
+                 , alternative :: Compiled
                  }
-          | Halt
+type Compiled = [Inst]
 
 data Env = Env { runEnv    :: M.Map String Expr
                , parentEnv :: Maybe Env
@@ -50,22 +45,22 @@ lookup key env = let e = runEnv env
                    Just e' -> lookup key e'
                    Nothing -> Nothing
 
-compile :: Expr -> Inst
-compile (SSymbol s) = Inst (Lookup s) Halt
-compile k = Inst (Constant k) Halt
+compile :: Expr -> Compiled
+compile (SSymbol s) = [Lookup s]
+compile k = [Constant k]
 
-execute :: VM -> Inst -> Expr
-execute vm Halt = accumulator vm
-execute vm inst = case getOp inst of
+execute :: VM -> Compiled -> Expr
+execute vm [] = accumulator vm
+execute vm (inst:nextInst) = case inst of
   Assign varName -> let vm' = setVar vm varName (accumulator vm)
-                    in execute vm' (nextInst inst)
+                    in execute vm' nextInst
   
-  Constant k -> execute vm { accumulator = k } (nextInst inst)
+  Constant k -> execute vm { accumulator = k } nextInst
   
   Lookup s -> case lookup s (environment vm) of
-    Just v  -> execute vm { accumulator = v } (nextInst inst)
+    Just v  -> execute vm { accumulator = v } nextInst
     Nothing -> SException ("Unbound variable: " ++ s)
     
-  Test c a -> if isTrue (accumulator vm)
-              then execute vm c
-              else execute vm a
+  Test consequent alternative -> if isTrue (accumulator vm)
+                                 then execute vm consequent
+                                 else execute vm alternative
