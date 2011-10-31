@@ -26,8 +26,7 @@ isFalse (SBool False) = True
 isFalse _             = False
 
 fromList :: [Expr] -> Expr
-fromList [] = SNull
-fromList (x:xs) = SPair x (fromList xs)
+fromList = foldr SPair SNull
 
 instance Show Expr where
   show (SSymbol s)   = map toUpper s
@@ -42,3 +41,13 @@ instance Show Expr where
             | otherwise = show p1 ++ " . " ++ show p2
   show SNull = "()"
   show (SException s) = "**Exception: " ++ s
+
+instance Eq Expr where
+  (SSymbol a) == (SSymbol b) = (map toUpper a) == (map toUpper b)
+  (SNumber a) == (SNumber b) = a == b
+  (SString a) == (SString b) = a == b
+  (SBool a) == (SBool b) = a == b
+  (SPair a b) == (SPair c d) = a == c && b == d
+  SNull == SNull = True
+  (SException a) == (SException b) = a == b
+  _ == _ = False

@@ -4,8 +4,8 @@ module VM
        , Op(..)
        , Env
        , execute
-       , defaultVM
-       , emptyEnv
+       , initialVM
+       , initialEnv
        ) where
 
 import Prelude hiding (lookup)
@@ -14,7 +14,8 @@ import Data.Char (toUpper)
 import qualified Data.Map as M
 import Expr
 
-data Op = Constant Expr
+data Op = Assign String
+        | Constant Expr
         | Lookup String
         | Test { consequent  :: Inst
                , alternative :: Inst
@@ -33,10 +34,14 @@ data VM = VM { accumulator :: Expr
              , environment :: Env
              }
 
-defaultVM :: VM
-defaultVM = VM SNull emptyEnv
+initialEnv = Env M.empty Nothing
+initialVM = VM SNull initialEnv
 
-emptyEnv = Env M.empty Nothing
+setVar :: VM -> String -> Expr -> VM
+setVar vm varName val = let envMap = runEnv (environment vm)
+                            parent = parentEnv (environment vm)
+                            newEnv = Env (M.insert varName val envMap) parent
+                        in vm { environment = newEnv }
 
 lookup :: String -> Env -> Maybe Expr
 lookup key env = let e = runEnv env
@@ -45,9 +50,16 @@ lookup key env = let e = runEnv env
                    Just e' -> lookup key e'
                    Nothing -> Nothing
 
+compile :: Expr -> Inst
+compile (SSymbol s) = Inst (Lookup s) Halt
+compile k = Inst (Constant k) Halt
+
 execute :: VM -> Inst -> Expr
 execute vm Halt = accumulator vm
 execute vm inst = case getOp inst of
+  Assign varName -> let vm' = setVar vm varName (accumulator vm)
+                    in execute vm' (nextInst inst)
+  
   Constant k -> execute vm { accumulator = k } (nextInst inst)
   
   Lookup s -> case lookup s (environment vm) of
