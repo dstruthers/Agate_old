@@ -13,8 +13,8 @@ repl = runRepl initialVM
   where runRepl vm = do
           putStr "scheme> "
           source <- getLine
-          let parsed = parse source
-          let compiled = compile parsed
-          let (result, vm') = execute initialVM compiled
+          let (result, vm') = execute vm $ compile $ parse source
           putStrLn $ show result
           runRepl vm'
+
+main = repl

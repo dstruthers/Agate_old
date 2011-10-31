@@ -1,12 +1,13 @@
 module VM 
        (
          Inst(..)
-       , Env
-       , VM
+       , Env(..)
+       , VM(..)
        , compile
        , execute
        , initialVM
        , initialEnv
+       , setVar
        ) where
 
 import Prelude hiding (lookup)
@@ -55,16 +56,25 @@ compile expr
   | isList expr == False = [Constant expr]
   | otherwise = case car expr of
     SSymbol s -> case (map toUpper s) of 
-      "IF" -> let test = compile (arg 1 expr)
-                  consequent = compile (arg 2 expr)
-                  alternative = if len expr > 3
-                                then compile (arg 3 expr)
-                                else [Constant SNull]
-              in test ++ [Test consequent alternative]
-      
+      "DEFINE" -> compileDefine expr
+      "IF" -> compileIf expr      
       "QUOTE" -> [Constant (arg 1 expr)]
-                 
-      _ -> [Constant (SException "Runtime error")]
+      _ -> compilationError "unknown error"
+
+compileDefine expr = case (arg 1 expr) of
+  SSymbol sym -> let value = compile (arg 2 expr)
+                 in value ++ [Assign sym]
+                    
+  _           -> compilationError "Argument 1 must be a symbol"
+                          
+compileIf expr = let test = compile (arg 1 expr)
+                     consequent = compile (arg 2 expr)
+                     alternative = if len expr > 3
+                                   then compile (arg 3 expr)
+                                   else [Constant SNull]
+                 in test ++ [Test consequent alternative]
+
+compilationError msg = [Constant (SException ("Compilation error: " ++ msg))]
 
 arg :: Int -> Expr -> Expr    
 arg 0 (SPair x _) = x
@@ -74,14 +84,16 @@ arg _ _ = SException "Premature end of list, or object not a list"
 execute :: VM -> Compiled -> (Expr, VM)
 execute vm [] = (accumulator vm, vm)
 execute vm (inst:nextInst) = case inst of
-  Assign varName -> let vm' = setVar vm varName (accumulator vm)
+  Assign varName -> let varName' = map toUpper varName
+                        vm' = setVar vm varName' (accumulator vm)
                     in execute vm' nextInst
   
   Constant k -> execute vm { accumulator = k } nextInst
   
-  Lookup s -> case lookup s (environment vm) of
-    Just v  -> execute vm { accumulator = v } nextInst
-    Nothing -> (SException ("Unbound variable: " ++ s), vm)
+  Lookup s -> let s' = map toUpper s
+              in case lookup s' (environment vm) of
+                Just v  -> execute vm { accumulator = v } nextInst
+                Nothing -> (SException ("Unbound variable: " ++ s'), vm)
     
   Test consequent alternative -> if isTrue (accumulator vm)
                                  then execute vm consequent

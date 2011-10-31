@@ -70,7 +70,7 @@ parseString = do char '"'
                  return $ SString s
 
 parseSymbol = do f <- firstAllowed
-                 r <- many (firstAllowed <|> digit)
+                 r <- many (firstAllowed <|> digit <|> oneOf "!?")
                  return $ SSymbol (f:r)
   where firstAllowed = oneOf "+-*/" <|> letter
 
