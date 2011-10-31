@@ -2,6 +2,7 @@ module VM
        (
          Inst(..)
        , Env
+       , compile
        , execute
        , initialVM
        , initialEnv
@@ -47,8 +48,25 @@ lookup key env = let e = runEnv env
 
 compile :: Expr -> Compiled
 compile (SSymbol s) = [Lookup s]
-compile k = [Constant k]
+compile expr
+  | isNull expr = [Constant SNull]
+  | isList expr == False = [Constant expr]
+  | otherwise = case car expr of
+    SSymbol s -> case (map toUpper s) of 
+      "IF" -> let test = compile (arg 1 expr)
+                  consequent = compile (arg 2 expr)
+                  alternative = if len expr > 3
+                                then compile (arg 3 expr)
+                                else [Constant SNull]
+              in test ++ [Test consequent alternative]
+                 
+      _ -> [Constant (SException "Runtime error")]
 
+arg :: Int -> Expr -> Expr    
+arg 0 (SPair x _) = x
+arg n (SPair _ y) = arg (n - 1) y
+arg _ _ = SException "Premature end of list, or object not a list"
+    
 execute :: VM -> Compiled -> Expr
 execute vm [] = accumulator vm
 execute vm (inst:nextInst) = case inst of

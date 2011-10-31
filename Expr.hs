@@ -10,9 +10,14 @@ data Expr = SSymbol String
           | SNull
           | SException String
 
+isPair :: Expr -> Bool
+isPair (SPair _ _) = True
+isPair _           = False
+
 isList :: Expr -> Bool
-isList (SPair _ _) = True
-isList _           = False
+isList SNull        = True
+isList (SPair _ p2) = isList p2
+isList _            = False
 
 isNull :: Expr -> Bool
 isNull SNull = True
@@ -28,6 +33,13 @@ isFalse _             = False
 fromList :: [Expr] -> Expr
 fromList = foldr SPair SNull
 
+car (SPair x _) = x
+cdr (SPair _ y) = y
+
+len :: Expr -> Int
+len SNull = 0
+len (SPair x xs) = 1 + len xs
+
 instance Show Expr where
   show (SSymbol s)   = map toUpper s
   show (SNumber n)   = show n
@@ -36,7 +48,7 @@ instance Show Expr where
   show (SBool False) = "#f"
   show p@(SPair _ _) = "(" ++ showPair p ++ ")"
     where showPair (SPair p1 p2)
-            | isList p2 = show p1 ++ " " ++ showPair p2
+            | isPair p2 = show p1 ++ " " ++ showPair p2
             | isNull p2 = show p1
             | otherwise = show p1 ++ " . " ++ show p2
   show SNull = "()"
