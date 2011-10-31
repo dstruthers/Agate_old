@@ -2,6 +2,7 @@ module VM
        (
          Inst(..)
        , Env
+       , VM
        , compile
        , execute
        , initialVM
@@ -39,6 +40,7 @@ setVar vm varName val = let envMap = runEnv (environment vm)
                             newEnv = Env (M.insert varName val envMap) parent
                         in vm { environment = newEnv }
 
+
 lookup :: String -> Env -> Maybe Expr
 lookup key env = let e = runEnv env
                      p = parentEnv env
@@ -69,8 +71,8 @@ arg 0 (SPair x _) = x
 arg n (SPair _ y) = arg (n - 1) y
 arg _ _ = SException "Premature end of list, or object not a list"
     
-execute :: VM -> Compiled -> Expr
-execute vm [] = accumulator vm
+execute :: VM -> Compiled -> (Expr, VM)
+execute vm [] = (accumulator vm, vm)
 execute vm (inst:nextInst) = case inst of
   Assign varName -> let vm' = setVar vm varName (accumulator vm)
                     in execute vm' nextInst
@@ -79,7 +81,7 @@ execute vm (inst:nextInst) = case inst of
   
   Lookup s -> case lookup s (environment vm) of
     Just v  -> execute vm { accumulator = v } nextInst
-    Nothing -> SException ("Unbound variable: " ++ s)
+    Nothing -> (SException ("Unbound variable: " ++ s), vm)
     
   Test consequent alternative -> if isTrue (accumulator vm)
                                  then execute vm consequent

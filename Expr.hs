@@ -1,6 +1,20 @@
-module Expr where
+module Expr 
+       (
+         Expr(..)
+       , fromList
+       , isPair
+       , isList
+       , isNull
+       , isTrue
+       , isFalse
+       , car
+       , cdr
+       , len
+       , Expr.parse
+       ) where
 
 import Data.Char (toUpper)
+import Text.ParserCombinators.Parsec
 
 data Expr = SSymbol String
           | SNumber Double
@@ -39,6 +53,49 @@ cdr (SPair _ y) = y
 len :: Expr -> Int
 len SNull = 0
 len (SPair x xs) = 1 + len xs
+
+
+-- only does integers at the moment
+parseBool = do char '#'
+               v <- oneOf "TFtf"
+               return $ if toUpper v == 'T' then SBool True else SBool False
+               
+parseNumber = do sign <- option "" (string "-")
+                 number <- many1 digit
+                 return $ SNumber (read (sign ++ number))
+
+parseString = do char '"'
+                 s <- many (noneOf "\"")
+                 char '"'
+                 return $ SString s
+
+parseSymbol = do f <- firstAllowed
+                 r <- many (firstAllowed <|> digit)
+                 return $ SSymbol (f:r)
+  where firstAllowed = oneOf "+-*/" <|> letter
+
+parseExprAux = try parseBool
+               <|> try parseNumber
+               <|> try parseSymbol
+               <|> try parseString
+               <|> try parseList
+
+parseList = do char '('
+               skipMany space
+               x <- parseExprAux `sepEndBy` (many1 space)
+               char ')'
+               return $ fromList x
+
+parseExpr = do skipMany space
+               x <- parseExprAux
+               skipMany space
+               eof
+               return x
+
+parse :: String -> Expr
+parse input = case (Text.ParserCombinators.Parsec.parse parseExpr "" input) of
+  Right x -> x
+  Left e -> SException (show e)
 
 instance Show Expr where
   show (SSymbol s)   = map toUpper s
