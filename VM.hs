@@ -59,6 +59,8 @@ compile expr
                                 then compile (arg 3 expr)
                                 else [Constant SNull]
               in test ++ [Test consequent alternative]
+      
+      "QUOTE" -> [Constant (arg 1 expr)]
                  
       _ -> [Constant (SException "Runtime error")]
 
