@@ -1,17 +1,13 @@
-module Scheme
-       (
-         Expr(..)
-       , parse
-       , fromList
-       , module VM
-       ) where
+module Main () where
 
 import Expr
 import VM
+import System.IO
 
 repl = runRepl initialVM
   where runRepl vm = do
           putStr "scheme> "
+          hFlush stdout
           source <- getLine
           let (result, vm') = execute vm $ compile $ parse source
           putStrLn $ show result
