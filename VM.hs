@@ -46,33 +46,37 @@ compile vm expr
   | otherwise = case car expr of
     Symbol s -> case (map toUpper s) of 
       "DEFINE" -> compileDefine vm expr
-      "IF" -> compileIf vm expr
+      "IF"     -> compileIf vm expr
       "LAMBDA" -> compileLambda vm expr
-      "QUOTE" -> [Constant (arg 1 expr)]
-      _ -> compilationError "unknown error"
+      "QUOTE"  -> [Constant (arg 1 expr)]
+      _        -> compilationError "unknown error"
 
-compileDefine vm expr = case (arg 1 expr) of
-  Symbol sym -> let value = compile vm (arg 2 expr)
-                in value ++ [Assign sym]
+compileDefine vm expr
+  | len expr /= 2 = compilationError "DEFINE requires exactly 2 arguments"
+  | otherwise = case (arg 1 expr) of
+    Symbol sym -> let value = compile vm (arg 2 expr)
+                  in value ++ [Assign sym]
                     
-  _          -> compilationError "Argument 1 must be a symbol"
+    _          -> compilationError "Argument 1 must be a symbol"
                           
-compileIf vm expr = let test = compile vm (arg 1 expr)
-                        consequent = compile vm (arg 2 expr)
-                        alternative = if len expr > 3
-                                      then compile vm (arg 3 expr)
-                                      else [Constant Null]
-                    in test ++ [Test consequent alternative]
+compileIf vm expr
+  | len expr < 3 || len expr > 4 = compilationError "IF requires 2 or 3 arguments"
+  | otherwise = let test = compile vm (arg 1 expr)
+                    consequent = compile vm (arg 2 expr)
+                    alternative = if len expr > 3
+                                  then compile vm (arg 3 expr)
+                                  else [Constant Null]
+                in test ++ [Test consequent alternative]
 
-compileLambda vm expr =
-  if len expr == 3
-  then let params = paramNames (arg 1 expr)
-           env    = environment vm
-           body   = compile vm (arg 2 expr)
-       in case params of 
-         Just p  -> [Constant (Procedure p env body)]
-         Nothing -> compilationError "Argument 1 to Lambda must be a list of symbols"
-  else compilationError "Lambda requires exactly 2 arguments"
+compileLambda vm expr
+  | len expr /= 3 = compilationError "LAMBDA requires exactly 2 arguments"
+  | otherwise = let params = paramNames (arg 1 expr)
+                    env    = environment vm
+                    body   = compile vm (arg 2 expr)
+                in case params of 
+                  Just p  -> [Constant (Procedure p env body)]
+                  Nothing -> compilationError "Argument 1 to Lambda must be a list of symbols"
+
     where paramNames Null = Just []
           paramNames (Pair (Symbol p) ps) = liftM2 (:) (Just p) (paramNames ps)
           paramNames _ = Nothing
