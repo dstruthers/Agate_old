@@ -54,15 +54,14 @@ len :: Expr -> Int
 len SNull = 0
 len (SPair x xs) = 1 + len xs
 
-
--- only does integers at the moment
 parseBool = do char '#'
                v <- oneOf "TFtf"
                return $ if toUpper v == 'T' then SBool True else SBool False
                
 parseNumber = do sign <- option "" (string "-")
                  number <- many1 digit
-                 return $ SNumber (read (sign ++ number))
+                 decimal <- option "0" (string "." >> many1 digit)
+                 return $ SNumber (read (sign ++ number ++ "." ++ decimal))
 
 parseString = do char '"'
                  s <- many (noneOf "\"")

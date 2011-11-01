@@ -1,4 +1,4 @@
-module Main () where
+module Main (repl) where
 
 import Expr
 import VM
