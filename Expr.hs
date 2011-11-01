@@ -16,61 +16,61 @@ module Expr
 import Data.Char (toUpper)
 import Text.ParserCombinators.Parsec
 
-data Expr = SSymbol String
-          | SNumber Double
-          | SString String
-          | SBool Bool
-          | SPair Expr Expr
-          | SNull
-          | SException String
+data Expr = Symbol String
+          | Number Double
+          | String String
+          | Bool Bool
+          | Pair Expr Expr
+          | Null
+          | Exception String
 
 isPair :: Expr -> Bool
-isPair (SPair _ _) = True
-isPair _           = False
+isPair (Pair _ _) = True
+isPair _          = False
 
 isList :: Expr -> Bool
-isList SNull        = True
-isList (SPair _ p2) = isList p2
-isList _            = False
+isList Null        = True
+isList (Pair _ p2) = isList p2
+isList _           = False
 
 isNull :: Expr -> Bool
-isNull SNull = True
-isNull _     = False
+isNull Null = True
+isNull _    = False
 
 isTrue :: Expr -> Bool
 isTrue = not . isFalse
 
 isFalse :: Expr -> Bool
-isFalse (SBool False) = True
-isFalse _             = False
+isFalse (Bool False) = True
+isFalse _            = False
 
 fromList :: [Expr] -> Expr
-fromList = foldr SPair SNull
+fromList = foldr Pair Null
 
-car (SPair x _) = x
-cdr (SPair _ y) = y
+car (Pair x _) = x
+cdr (Pair _ y) = y
 
 len :: Expr -> Int
-len SNull = 0
-len (SPair x xs) = 1 + len xs
+len Null        = 0
+len (Pair x xs) = 1 + len xs
 
 parseBool = do char '#'
                v <- oneOf "TFtf"
-               return $ if toUpper v == 'T' then SBool True else SBool False
+               return $ if toUpper v == 'T' then Bool True else Bool False
                
 parseNumber = do sign <- option "" (string "-")
                  number <- many1 digit
                  decimal <- option "0" (string "." >> many1 digit)
-                 return $ SNumber (read (sign ++ number ++ "." ++ decimal))
+                 return $ Number (read (sign ++ number ++ "." ++ decimal))
 
 parseString = do char '"'
                  s <- many (noneOf "\"")
                  char '"'
-                 return $ SString s
+                 return $ String s
 
 parseSymbol = do f <- firstAllowed
                  r <- many (firstAllowed <|> digit <|> oneOf "!?")
-                 return $ SSymbol (f:r)
+                 return $ Symbol (f:r)
   where firstAllowed = oneOf "+-*/" <|> letter
 
 parseExprAux = try parseBool
@@ -94,28 +94,28 @@ parseExpr = do skipMany space
 parse :: String -> Expr
 parse input = case (Text.ParserCombinators.Parsec.parse parseExpr "" input) of
   Right x -> x
-  Left e -> SException (show e)
+  Left e -> Exception (show e)
 
 instance Show Expr where
-  show (SSymbol s)   = map toUpper s
-  show (SNumber n)   = show n
-  show (SString s)   = show s
-  show (SBool True)  = "#t"
-  show (SBool False) = "#f"
-  show p@(SPair _ _) = "(" ++ showPair p ++ ")"
-    where showPair (SPair p1 p2)
+  show (Symbol s)   = map toUpper s
+  show (Number n)   = show n
+  show (String s)   = show s
+  show (Bool True)  = "#t"
+  show (Bool False) = "#f"
+  show p@(Pair _ _) = "(" ++ showPair p ++ ")"
+    where showPair (Pair p1 p2)
             | isPair p2 = show p1 ++ " " ++ showPair p2
             | isNull p2 = show p1
             | otherwise = show p1 ++ " . " ++ show p2
-  show SNull = "()"
-  show (SException s) = "**Exception: " ++ s
+  show Null = "()"
+  show (Exception s) = "**Exception: " ++ s
 
 instance Eq Expr where
-  (SSymbol a) == (SSymbol b) = (map toUpper a) == (map toUpper b)
-  (SNumber a) == (SNumber b) = a == b
-  (SString a) == (SString b) = a == b
-  (SBool a) == (SBool b) = a == b
-  (SPair a b) == (SPair c d) = a == c && b == d
-  SNull == SNull = True
-  (SException a) == (SException b) = a == b
+  (Symbol a) == (Symbol b) = (map toUpper a) == (map toUpper b)
+  (Number a) == (Number b) = a == b
+  (String a) == (String b) = a == b
+  (Bool a) == (Bool b) = a == b
+  (Pair a b) == (Pair c d) = a == c && b == d
+  Null == Null = True
+  (Exception a) == (Exception b) = a == b
   _ == _ = False
