@@ -1,13 +1,9 @@
 module VM 
        (
-         Inst(..)
-       , Env(..)
-       , VM(..)
+         VM(..)
        , compile
        , execute
        , initialVM
-       , initialEnv
-       , setVar
        ) where
 
 import Prelude hiding (lookup)
@@ -75,7 +71,7 @@ compileLambda vm expr
                     body   = compile vm (arg 2 expr)
                 in case params of 
                   Just p  -> [Constant (Procedure p env body)]
-                  Nothing -> compilationError "Argument 1 to Lambda must be a list of symbols"
+                  Nothing -> compilationError "Argument 1 to LAMBDA must be a list of symbols"
 
     where paramNames Null = Just []
           paramNames (Pair (Symbol p) ps) = liftM2 (:) (Just p) (paramNames ps)
