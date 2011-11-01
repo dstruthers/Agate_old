@@ -4,13 +4,15 @@ import Expr
 import VM
 import System.IO
 
+main = repl
+
 repl = runRepl initialVM
   where runRepl vm = do
-          putStr "scheme> "
-          hFlush stdout
-          source <- getLine
-          let (result, vm') = execute vm $ compile $ parse source
+          source <- prompt "scheme> "
+          let (result, vm') = eval vm source
           putStrLn $ show result
           runRepl vm'
+        
+prompt p = putStr p >> hFlush stdout >> getLine
+eval vm src = execute vm $ compile vm $ parse src
 
-main = repl

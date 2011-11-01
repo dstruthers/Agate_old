@@ -16,18 +16,6 @@ import Data.Char (toUpper)
 import qualified Data.Map as Map
 import Expr
 
-data Inst = Assign String
-          | Constant Expr
-          | Lookup String
-          | Test { consequent  :: Compiled
-                 , alternative :: Compiled
-                 }
-type Compiled = [Inst]
-
-data Env = Env { runEnv    :: Map.Map String Expr
-               , parentEnv :: Maybe Env
-               }
-
 data VM = VM { accumulator :: Expr
              , environment :: Env
              }
@@ -49,30 +37,44 @@ lookup key env = let e = runEnv env
                    Just e' -> lookup key e'
                    Nothing -> Nothing
 
-compile :: Expr -> Compiled
-compile (Symbol s) = [Lookup s]
-compile expr
+compile :: VM -> Expr -> Compiled
+compile _ (Symbol s) = [Lookup s]
+compile vm expr
   | isNull expr = [Constant Null]
   | isList expr == False = [Constant expr]
   | otherwise = case car expr of
     Symbol s -> case (map toUpper s) of 
-      "DEFINE" -> compileDefine expr
-      "IF" -> compileIf expr      
+      "DEFINE" -> compileDefine vm expr
+      "IF" -> compileIf vm expr
+      "LAMBDA" -> compileLambda vm expr
       "QUOTE" -> [Constant (arg 1 expr)]
       _ -> compilationError "unknown error"
 
-compileDefine expr = case (arg 1 expr) of
-  Symbol sym -> let value = compile (arg 2 expr)
+compileDefine vm expr = case (arg 1 expr) of
+  Symbol sym -> let value = compile vm (arg 2 expr)
                 in value ++ [Assign sym]
                     
   _          -> compilationError "Argument 1 must be a symbol"
                           
-compileIf expr = let test = compile (arg 1 expr)
-                     consequent = compile (arg 2 expr)
-                     alternative = if len expr > 3
-                                   then compile (arg 3 expr)
-                                   else [Constant Null]
-                 in test ++ [Test consequent alternative]
+compileIf vm expr = let test = compile vm (arg 1 expr)
+                        consequent = compile vm (arg 2 expr)
+                        alternative = if len expr > 3
+                                      then compile vm (arg 3 expr)
+                                      else [Constant Null]
+                    in test ++ [Test consequent alternative]
+
+compileLambda vm expr =
+  if len expr == 3
+  then let params = paramNames (arg 1 expr)
+           env    = environment vm
+           body   = compile vm (arg 2 expr)
+       in case params of 
+         Just p -> [Constant (Procedure p env body)]
+         Nothing -> compilationError "Argument 1 to Lambda must be a list of symbols"
+  else compilationError "Lambda requires exactly 2 arguments"
+    where paramNames Null = Just []
+          paramNames (Pair (Symbol p) ps) = liftM2 (:) (Just p) (paramNames ps)
+          paramNames _ = Nothing
 
 compilationError msg = [Constant (Exception ("Compilation error: " ++ msg))]
 

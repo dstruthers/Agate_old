@@ -1,6 +1,9 @@
 module Expr 
        (
          Expr(..)
+       , Inst(..)
+       , Env(..)
+       , Compiled
        , fromList
        , isPair
        , isList
@@ -14,14 +17,33 @@ module Expr
        ) where
 
 import Data.Char (toUpper)
+import qualified Data.Map as Map
 import Text.ParserCombinators.Parsec
 
+data Inst = Assign String
+          | Constant Expr
+          | Lookup String
+          | Test { consequent  :: Compiled
+                 , alternative :: Compiled
+                 }
+          deriving (Eq)
+                   
+type Compiled = [Inst]
+
+data Env = Env { runEnv    :: Map.Map String Expr
+               , parentEnv :: Maybe Env
+               } deriving (Eq)
+           
 data Expr = Symbol String
           | Number Double
           | String String
           | Bool Bool
           | Pair Expr Expr
           | Null
+          | Procedure { params :: [String]
+                      , env :: Env
+                      , body :: Compiled
+                      }
           | Exception String
 
 isPair :: Expr -> Bool
@@ -73,7 +95,7 @@ parseSymbol = do f <- firstAllowed
                  return $ Symbol (f:r)
   where firstAllowed = oneOf "+-*/" <|> letter
 
-parseExprAux = try parseBool
+parseAnyExpr = try parseBool
                <|> try parseNumber
                <|> try parseSymbol
                <|> try parseString
@@ -81,12 +103,12 @@ parseExprAux = try parseBool
 
 parseList = do char '('
                skipMany space
-               x <- parseExprAux `sepEndBy` (many1 space)
+               x <- parseAnyExpr `sepEndBy` (many1 space)
                char ')'
                return $ fromList x
 
 parseExpr = do skipMany space
-               x <- parseExprAux
+               x <- parseAnyExpr
                skipMany space
                eof
                return x
@@ -107,6 +129,7 @@ instance Show Expr where
             | isPair p2 = show p1 ++ " " ++ showPair p2
             | isNull p2 = show p1
             | otherwise = show p1 ++ " . " ++ show p2
+  show (Procedure _ _ _) = "#<compiled procedure>"
   show Null = "()"
   show (Exception s) = "**Exception: " ++ s
 
@@ -117,5 +140,7 @@ instance Eq Expr where
   (Bool a) == (Bool b) = a == b
   (Pair a b) == (Pair c d) = a == c && b == d
   Null == Null = True
+  (Procedure p1 e1 b1) == (Procedure p2 e2 b2) =
+    p1 == p2 && e1 == e2 && b1 == b2
   (Exception a) == (Exception b) = a == b
   _ == _ = False
