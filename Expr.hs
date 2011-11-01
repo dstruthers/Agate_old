@@ -20,7 +20,8 @@ import Data.Char (toUpper)
 import qualified Data.Map as Map
 import Text.ParserCombinators.Parsec
 
-data Inst = Assign String
+data Inst = Argument
+          | Assign String
           | Constant Expr
           | Lookup String
           | Test { consequent  :: Compiled
@@ -68,6 +69,9 @@ isFalse _            = False
 
 fromList :: [Expr] -> Expr
 fromList = foldr Pair Null
+
+toList :: Expr -> [Expr]
+toList (Pair x xs) = x : toList xs
 
 car (Pair x _) = x
 cdr (Pair _ y) = y

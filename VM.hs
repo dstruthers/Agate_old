@@ -18,10 +18,11 @@ import Expr
 
 data VM = VM { accumulator :: Expr
              , environment :: Env
+             , arguments   :: [Expr]
              }
 
 initialEnv = Env Map.empty Nothing
-initialVM = VM Null initialEnv
+initialVM = VM Null initialEnv []
 
 setVar :: VM -> String -> Expr -> VM
 setVar vm varName val = let envMap = runEnv (environment vm)
@@ -69,7 +70,7 @@ compileLambda vm expr =
            env    = environment vm
            body   = compile vm (arg 2 expr)
        in case params of 
-         Just p -> [Constant (Procedure p env body)]
+         Just p  -> [Constant (Procedure p env body)]
          Nothing -> compilationError "Argument 1 to Lambda must be a list of symbols"
   else compilationError "Lambda requires exactly 2 arguments"
     where paramNames Null = Just []
@@ -86,6 +87,11 @@ arg _ _ = Exception "Premature end of list, or object not a list"
 execute :: VM -> Compiled -> (Expr, VM)
 execute vm [] = (accumulator vm, vm)
 execute vm (inst:nextInst) = case inst of
+  Argument -> let argStack = arguments vm
+                  newArgs  = argStack ++ [accumulator vm]
+                  vm'      = vm { arguments = newArgs }
+              in execute vm' nextInst
+                 
   Assign varName -> let varName' = map toUpper varName
                         vm' = setVar vm varName' (accumulator vm)
                     in execute vm' nextInst
