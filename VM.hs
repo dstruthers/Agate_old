@@ -1,134 +1,183 @@
-module VM 
+module VM
        ( compile
        , execute
        , initialVM
        ) where
 
 import Prelude hiding (lookup)
-import Control.Monad
+import Control.Monad (liftM2, mplus)
 import Data.Char (toUpper)
 import qualified Data.Map as Map
 import Types
-import Expr
+import Parse
 
+initialEnv :: Env
 initialEnv = Env initialMap Nothing
   where forms = [("DEFINE", SpecialForm compileDefine)
                 ,("IF", SpecialForm compileIf)
                 ,("LAMBDA", SpecialForm compileLambda)
                 ,("QUOTE", SpecialForm compileQuote)
                 ]
-        initialMap   = foldr addToMap Map.empty forms
+        initialMap = foldr addToMap Map.empty forms
         addToMap (sym, binding) m = Map.insert sym binding m
-        
-initialVM = VM initialAcc initialEnv initialArgs initialStack
-  where initialAcc = Null
-        initialArgs = []
-        initialStack = Nothing
 
-setVar :: VM -> String -> Expr -> VM
-setVar vm varName val = let envMap = runEnv (environment vm)
-                            parent = parentEnv (environment vm)
-                            newEnv = Env (Map.insert varName val envMap) parent
-                        in vm { environment = newEnv }
+newEnv :: Env -> Env
+newEnv e = Env Map.empty (Just e)
 
+bindEnv :: Env -> String -> Expr -> Env
+bindEnv e k v = Env (Map.insert k v (getMap e)) (parentEnv e)
+
+initialVM = VM op acc env args stack
+  where op    = Exit
+        acc   = Null
+        env   = initialEnv
+        args  = []
+        stack = Nothing
 
 lookup :: String -> Env -> Maybe Expr
-lookup key env = let e = runEnv env
+lookup key env = let m = getMap env
                      p = parentEnv env
-                 in Map.lookup key e `mplus` case p of
-                   Just e' -> lookup key e'
+                 in Map.lookup key m `mplus` case p of
+                   Just m' -> lookup key m'
                    Nothing -> Nothing
 
-compile :: VM -> Expr -> Compiled
-compile _ (Symbol s) = [Lookup s]
-compile vm expr
-  | isList expr == False = [Constant expr]
-  | otherwise = case car expr of
+bindVar :: VM -> String -> Expr -> VM
+bindVar vm sym val = let map    = getMap (environment vm)
+                         parent = parentEnv (environment vm)
+                         env    = Env (Map.insert sym val map) parent
+                     in vm { environment = env }
+
+compile :: Compiler
+compile vm expr next
+  | isList expr = case car expr of
     Symbol s -> case lookup (map toUpper s) (environment vm) of
-      Just (SpecialForm compiler) -> compiler vm expr
-      _ -> compileApply vm expr
-    _ -> compileApply vm expr
+      Just (SpecialForm compiler) -> compiler vm expr next
+      _ -> compileApply vm expr next
+    _ -> compileApply vm expr next
+  
+  | otherwise = case expr of 
+    Symbol s  -> Lookup s next
+    otherwise -> Constant expr next
 
-compileApply vm expr =
-  let fn = compile vm (car expr)
-  in case head fn of
-    Constant (SpecialForm compiler) -> compiler vm expr
-    _ -> compileArgs vm (cdr expr) ++ fn ++ [Apply]
-    where compileArgs vm Null = []
-          compileArgs vm (Pair arg rest) = compile vm arg ++ [Argument] ++ compileArgs vm rest
+compileApply vm expr next =
+  let fn = compile vm (car expr) next
+  in case fn of
+    Constant (SpecialForm compiler) n -> compiler vm expr n
+    Constant (Procedure p e b) n -> 
+      let compiled = compileArgs vm (cdr expr) (Constant (Procedure p e b) (Apply n))
+      in case next of
+        Return -> compiled
+        _      -> Frame next compiled
+    Lookup sym n ->
+      let compiled = compileArgs vm (cdr expr) (Lookup sym (Apply n))
+      in case next of
+        Return -> compiled
+        _      -> Frame next compiled
+    
+    where compileArgs _ Null n' = n'
+          compileArgs vm (Pair arg rest) next =
+            compile vm arg (Argument (compileArgs vm rest next))
 
-compileDefine vm expr
+compileDefine vm expr next
   | len expr /= 3 = compilationError "DEFINE requires exactly 2 arguments"
-  | otherwise = case (arg 1 expr) of
-    Symbol sym -> let value = compile vm (arg 2 expr)
-                  in value ++ [Assign sym]
-                    
-    _          -> compilationError "Argument 1 must be a symbol"
-                          
-compileIf vm expr
+  | otherwise = 
+    case (arg 1 expr) of
+      Symbol sym -> compile vm (arg 2 expr) (Assign sym next)
+      _          -> compilationError "Argument 1 must be a symbol"
+
+compileIf vm expr next
   | len expr < 3 || len expr > 4 = compilationError "IF requires 2 or 3 arguments"
-  | otherwise = let test = compile vm (arg 1 expr)
-                    consequent = compile vm (arg 2 expr)
-                    alternative = if len expr > 3
-                                  then compile vm (arg 3 expr)
-                                  else [Constant Null]
-                in test ++ [Test consequent alternative]
+  | otherwise =
+    let consequence = compile vm (arg 2 expr) next
+        alternative = if len expr > 3
+                      then compile vm (arg 3 expr) next
+                      else Constant Null next
+    in compile vm (arg 1 expr) (Test consequence alternative)
 
-compileLambda vm expr
+compileLambda vm expr next
   | len expr /= 3 = compilationError "LAMBDA requires exactly 2 arguments"
-  | otherwise = let params = paramNames (arg 1 expr)
-                    env    = environment vm
-                    body   = compile vm (arg 2 expr)
-                in case params of 
-                  Just p  -> [Constant (Procedure p env body)]
-                  Nothing -> compilationError "Argument 1 to LAMBDA must be a list of symbols"
+  | otherwise =
+    let params = paramNames (arg 1 expr)
+        env    = environment vm
+        body   = compile vm (arg 2 expr) Return
+    in case params of
+      Just p -> Constant (Procedure p env body) next
+      _      -> compilationError "Argument 1 to LAMBDA must be a list of symbols"
+      
+      where paramNames Null = Just []
+            paramNames (Pair (Symbol p) ps) = liftM2 (:) (Just p) (paramNames ps)
+            paramNames _ = Nothing
 
-    where paramNames Null = Just []
-          paramNames (Pair (Symbol p) ps) = liftM2 (:) (Just p) (paramNames ps)
-          paramNames _ = Nothing
-
-compileQuote vm expr
+compileQuote vm expr next
   | len expr > 2 = compilationError "QUOTE requires exactly 1 argument"
-  | otherwise    = [Constant (arg 1 expr)]
+  | otherwise    = Constant (arg 1 expr) next
 
-compilationError msg = [Constant (Exception ("Compilation error: " ++ msg))]
+compilationError msg = Constant (Exception ("Compilation error: " ++ msg)) Exit
 
-arg :: Int -> Expr -> Expr    
+arg :: Int -> Expr -> Expr
 arg 0 (Pair x _) = x
 arg n (Pair _ y) = arg (n - 1) y
 arg _ _ = Exception "Premature end of list, or object not a list"
-    
-execute :: VM -> Compiled -> (Expr, VM)
-execute vm [] = (accumulator vm, vm)
-execute vm (inst:nextInst) = case inst of
-  Apply -> execute vm { accumulator = head (arguments vm) } nextInst
-  
-  Argument -> let argStack = arguments vm
-                  newArgs  = argStack ++ [accumulator vm]
-                  vm'      = vm { arguments = newArgs }
-              in execute vm' nextInst
-                 
-  Assign varName -> let varName' = map toUpper varName
-                        vm' = setVar vm varName' (accumulator vm)
-                    in execute vm' nextInst
-  
-  Constant k -> execute vm { accumulator = k } nextInst
-  
-  Frame ret -> execute vm { stack = Just (ret, vm) } nextInst
 
-  Lookup s -> let s' = map toUpper s
-              in case lookup s' (environment vm) of
-                Just v  -> execute vm { accumulator = v } nextInst
-                Nothing -> (Exception ("Unbound variable: " ++ s'), vm)
-    
-  Return -> case stack vm of
-                 Just (next, newState) ->
-                   execute vm { environment = environment newState
-                              , arguments   = arguments newState
-                              , stack       = stack newState            
-                              } next
-                 Nothing -> (Exception "Return from empty call stack", vm)
+execute :: VM -> (Expr, VM)
+execute vm = case nextOp vm of
+  Apply next ->
+    case accumulator vm of
+      Procedure params env body ->
+        let env' = mkEnvWithArgs (newEnv (environment vm))
+                                 params
+                                 (arguments vm)
+                                           
+            mkEnvWithArgs e [] _ = e
+            mkEnvWithArgs e (p:ps) as =
+                mkEnvWithArgs (bindEnv e (map toUpper p) (head as)) ps (tail as)
+                
+        in execute vm { nextOp = body, environment = env' }
+      
+      _ -> (Exception (show (accumulator vm) ++ ": not applicable"), vm)
+  
+  Argument next ->
+    let args  = arguments vm
+        args' = args ++ [accumulator vm]
+        vm'   = vm { nextOp = next, arguments = args' }
+    in execute vm'
 
-  Test consequent alternative -> if isTrue (accumulator vm)
-                                 then execute vm consequent
-                                 else execute vm alternative
+  Assign sym next ->
+    let sym' = (map toUpper sym)
+        vm'  = bindVar vm sym' (accumulator vm)
+    in execute vm' { nextOp = next }
+
+  Constant k next ->
+    execute vm { nextOp = next, accumulator = k }
+  
+  Exit ->
+    (accumulator vm, vm)  
+  
+  Frame ret next ->
+    let vm' = vm { nextOp = next
+                 , arguments = []
+                 , stack = Just vm { nextOp = ret }
+                 }
+    in execute vm'
+  
+  Lookup sym next ->
+    let s = map toUpper sym
+    in case lookup s (environment vm) of
+      Just v  -> execute vm { nextOp = next, accumulator = v }
+      Nothing -> (Exception ("Unbound variable: " ++ s), vm)
+  
+  Return ->
+    case stack vm of
+      Just stackVM ->
+        let vm' = vm { nextOp = nextOp stackVM
+                     , environment = environment stackVM
+                     , arguments = arguments stackVM
+                     , stack = stack stackVM
+                     }
+        in execute vm'
+      _ -> (Exception "Return from empty stack", vm)
+  
+  Test consequence alternative -> 
+    if isTrue (accumulator vm)
+    then execute vm { nextOp = consequence }
+    else execute vm { nextOp = alternative }

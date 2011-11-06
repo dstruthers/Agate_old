@@ -1,6 +1,7 @@
 module Main (repl) where
 
-import Expr
+import Types
+import Parse
 import VM
 import System.IO
 
@@ -14,5 +15,5 @@ repl = runRepl initialVM
           runRepl vm'
         
 prompt p = putStr p >> hFlush stdout >> getLine
-eval vm src = execute vm $ compile vm $ parse src
+eval vm src = execute vm { nextOp = compile vm (parse src) Exit }
 

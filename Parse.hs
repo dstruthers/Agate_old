@@ -1,5 +1,5 @@
-module Expr 
-       ( Expr.parse
+module Parse 
+       ( Parse.parse
        ) where
 
 import Data.Char (toUpper)
