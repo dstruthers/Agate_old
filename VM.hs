@@ -60,19 +60,23 @@ compile vm expr next
     otherwise -> Constant expr next
 
 compileApply vm expr next =
-  let fn = compile vm (car expr) next
-  in case fn of
-    Constant (SpecialForm compiler) n -> compiler vm expr n
-    Constant (Procedure p e b) n -> 
-      let compiled = compileArgs vm (cdr expr) (Constant (Procedure p e b) (Apply n))
-      in case next of
-        Return -> compiled
-        _      -> Frame next compiled
-    Lookup sym n ->
-      let compiled = compileArgs vm (cdr expr) (Lookup sym (Apply n))
-      in case next of
-        Return -> compiled
-        _      -> Frame next compiled
+  case car expr of
+    Exception _ -> compilationError "Ill-formed expression"
+    _ ->
+      let fn = compile vm (car expr) next
+      in case fn of
+        Constant (SpecialForm compiler) n -> compiler vm expr n
+        Constant (Procedure p e b) n -> 
+          let compiled = compileArgs vm (cdr expr) (Constant (Procedure p e b) (Apply n))
+          in case next of
+            Return -> compiled
+            _      -> Frame next compiled
+        
+        Lookup sym n ->
+          let compiled = compileArgs vm (cdr expr) (Lookup sym (Apply n))
+          in case next of
+            Return -> compiled
+            _      -> Frame next compiled
     
     where compileArgs _ Null n' = n'
           compileArgs vm (Pair arg rest) next =
@@ -128,7 +132,7 @@ execute vm = case nextOp vm of
                                  params
                                  (arguments vm)
                                            
-            mkEnvWithArgs e [] _ = e
+            mkEnvWithArgs e []     _  = e
             mkEnvWithArgs e (p:ps) as =
                 mkEnvWithArgs (bindEnv e (map toUpper p) (head as)) ps (tail as)
                 
