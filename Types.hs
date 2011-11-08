@@ -59,7 +59,11 @@ instance Eq Expr where
 
 instance Show Expr where
   show (Symbol s)   = map toUpper s
-  show (Number n)   = show n
+  show (Number n)   = format n
+    where format n = let n' = round n
+                     in if (toRational n') == toRational n
+                        then show n'
+                        else show n
   show (String s)   = show s
   show (Bool True)  = "#t"
   show (Bool False) = "#f"
