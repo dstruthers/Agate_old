@@ -6,6 +6,9 @@ import Data.Char (toUpper)
 data Op = Apply Op
         | Argument Op
         | Assign String Op
+        | Car Op
+        | Cdr Op
+        | Cons Op
         | Constant Expr Op
         | Exit
         | Frame Op Op

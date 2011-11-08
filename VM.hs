@@ -11,12 +11,18 @@ import qualified Data.Map as Map
 import Types
 import Parse
 
+emptyEnv = Env Map.empty Nothing
+
 initialEnv :: Env
 initialEnv = Env initialMap Nothing
   where forms = [("DEFINE", SpecialForm compileDefine)
                 ,("IF", SpecialForm compileIf)
                 ,("LAMBDA", SpecialForm compileLambda)
                 ,("QUOTE", SpecialForm compileQuote)
+
+                ,("CAR", Procedure ["X"] emptyEnv (Car Return))
+                ,("CDR", Procedure ["X"] emptyEnv (Cdr Return))
+                ,("CONS", Procedure ["X", "Y"] emptyEnv (Cons Return))
                 ]
         initialMap = foldr addToMap Map.empty forms
         addToMap (sym, binding) m = Map.insert sym binding m
@@ -151,6 +157,21 @@ execute vm = case nextOp vm of
         vm'  = bindVar vm sym' (accumulator vm)
     in execute vm' { nextOp = next }
 
+  Car next ->
+    case head (arguments vm) of
+      Pair p1 _ -> execute vm { nextOp = next, accumulator = p1 }
+      _         -> (Exception "Pair expected", vm)
+      
+  Cdr next ->
+    case head (arguments vm) of
+      Pair _ p2 -> execute vm { nextOp = next, accumulator = p2 }
+      _         -> (Exception "Pair expected", vm)
+      
+  Cons next ->
+    let p1 = head (arguments vm)
+        p2 = arguments vm !! 1
+    in execute vm { nextOp = next, accumulator = Pair p1 p2 }
+  
   Constant k next ->
     execute vm { nextOp = next, accumulator = k }
   
