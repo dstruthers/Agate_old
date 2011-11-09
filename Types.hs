@@ -10,6 +10,7 @@ data Op = Apply Op
         | Cdr Op
         | Cons Op
         | Constant Expr Op
+        | Equal Op
         | Exit
         | Frame Op Op
         | Lookup String Op
@@ -72,7 +73,7 @@ instance Show Expr where
             | isPair p2 = show p1 ++ " " ++ showPair p2
             | isNull p2 = show p1
             | otherwise = show p1 ++ " . " ++ show p2
-  show (Procedure _ _ _) = "#<compiled procedure>"
+  show (Procedure _ _ b) = "#<compiled procedure -- " ++ show b ++ ">"
   show (SpecialForm _) = "#<special form>"
   show Null = "()"
   show (Exception s) = "**Exception: " ++ s

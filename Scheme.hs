@@ -16,4 +16,5 @@ repl = runRepl initialVM
         
 prompt p = putStr p >> hFlush stdout >> getLine
 eval vm src = execute vm { nextOp = compile vm (parse src) Exit }
+--eval vm src = (String $ show $ compile vm (parse src) Exit, vm)
 

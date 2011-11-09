@@ -23,6 +23,7 @@ initialEnv = Env initialMap Nothing
                 ,("CAR", Procedure ["X"] emptyEnv (Car Return))
                 ,("CDR", Procedure ["X"] emptyEnv (Cdr Return))
                 ,("CONS", Procedure ["X", "Y"] emptyEnv (Cons Return))
+                ,("EQUAL?", Procedure ["X", "Y"] emptyEnv (Equal Return))
                 ]
         initialMap = foldr addToMap Map.empty forms
         addToMap (sym, binding) m = Map.insert sym binding m
@@ -69,20 +70,10 @@ compileApply vm expr next =
   case car expr of
     Exception _ -> compilationError "Ill-formed expression"
     _ ->
-      let fn = compile vm (car expr) next
-      in case fn of
-        Constant (SpecialForm compiler) n -> compiler vm expr n
-        Constant (Procedure p e b) n -> 
-          let compiled = compileArgs vm (cdr expr) (Constant (Procedure p e b) (Apply n))
-          in case next of
-            Return -> compiled
-            _      -> Frame next compiled
-        
-        Lookup sym n ->
-          let compiled = compileArgs vm (cdr expr) (Lookup sym (Apply n))
-          in case next of
-            Return -> compiled
-            _      -> Frame next compiled
+      let compiled = compileArgs vm (cdr expr) (compile vm (car expr) (Apply next))
+      in case next of
+        Return -> compiled
+        _      -> Frame next compiled
     
     where compileArgs _ Null n' = n'
           compileArgs vm (Pair arg rest) next =
@@ -137,12 +128,14 @@ execute vm = case nextOp vm of
         let env' = mkEnvWithArgs (newEnv (environment vm))
                                  params
                                  (arguments vm)
+                                 
+            newArgs = drop (length params) (arguments vm)
                                            
             mkEnvWithArgs e []     _  = e
             mkEnvWithArgs e (p:ps) as =
                 mkEnvWithArgs (bindEnv e (map toUpper p) (head as)) ps (tail as)
                 
-        in execute vm { nextOp = body, environment = env' }
+        in execute vm { nextOp = body, environment = env', arguments = newArgs }
       
       _ -> (Exception (show (accumulator vm) ++ ": not applicable"), vm)
   
@@ -158,22 +151,35 @@ execute vm = case nextOp vm of
     in execute vm' { nextOp = next }
 
   Car next ->
-    case head (arguments vm) of
-      Pair p1 _ -> execute vm { nextOp = next, accumulator = p1 }
-      _         -> (Exception "Pair expected", vm)
+    case lookup "X" (environment vm) of
+      Just (Pair p1 _) -> execute vm { nextOp = next, accumulator = p1 }
+      _                -> (Exception "Pair expected", vm)
       
   Cdr next ->
-    case head (arguments vm) of
-      Pair _ p2 -> execute vm { nextOp = next, accumulator = p2 }
-      _         -> (Exception "Pair expected", vm)
+    case lookup "X" (environment vm) of
+      Just (Pair _ p2) -> execute vm { nextOp = next, accumulator = p2 }
+      _                -> (Exception "Pair expected", vm)
       
   Cons next ->
-    let p1 = head (arguments vm)
-        p2 = arguments vm !! 1
-    in execute vm { nextOp = next, accumulator = Pair p1 p2 }
-  
+    case lookup "X" (environment vm) of
+      Just p1 ->
+        case lookup "Y" (environment vm) of
+          Just p2 -> let result = Pair p1 p2
+                    in execute vm { nextOp = next, accumulator = result }
+          _ -> (Exception "Insufficient arguments", vm)
+      _ -> (Exception "Insufficient arguments", vm)
+      
   Constant k next ->
     execute vm { nextOp = next, accumulator = k }
+  
+  Equal next ->
+    case lookup "X" (environment vm) of
+      Just x ->
+        case lookup "Y" (environment vm) of
+          Just y -> let result = Bool (x == y)
+                    in execute vm { nextOp = next, accumulator = result }
+          _ -> (Exception "Insufficient arguments", vm)
+      _ -> (Exception "Insufficient arguments", vm)
   
   Exit ->
     (accumulator vm, vm)  
