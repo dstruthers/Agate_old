@@ -6,11 +6,7 @@ import Data.Char (toUpper)
 data Op = Apply Op
         | Argument Op
         | Assign String Op
-        | Car Op
-        | Cdr Op
-        | Cons Op
         | Constant Expr Op
-        | Equal Op
         | Exit
         | Frame Op Op
         | Lookup String Op
@@ -18,6 +14,13 @@ data Op = Apply Op
         | Test { consequence  :: Op
                , alternative :: Op
                }
+          
+          -- Instructions for internal functions
+        | Car Op
+        | Cdr Op
+        | Cons Op
+        | Equal Op          
+          
         deriving (Eq, Show)
 
 data Env = Env { getMap    :: Map.Map String Expr
@@ -73,7 +76,7 @@ instance Show Expr where
             | isPair p2 = show p1 ++ " " ++ showPair p2
             | isNull p2 = show p1
             | otherwise = show p1 ++ " . " ++ show p2
-  show (Procedure _ _ b) = "#<compiled procedure -- " ++ show b ++ ">"
+  show (Procedure _ _ b) = "#<compiled procedure>"
   show (SpecialForm _) = "#<special form>"
   show Null = "()"
   show (Exception s) = "**Exception: " ++ s
@@ -113,12 +116,3 @@ cdr _ = Exception "Pair expected"
 len :: Expr -> Int
 len Null        = 0
 len (Pair x xs) = 1 + len xs
-
-{-next :: Op -> Op
-next (Apply o) = o
-next (Argument o) = o
-next (Assign _ o) = o
-next (Constant _ o) = o
-next (Frame _ o) = o
-next (Lookup _ o) = o
--}
